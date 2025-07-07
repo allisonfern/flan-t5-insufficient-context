@@ -34,8 +34,11 @@ output/
 
 # Transformers Trainer output
 flan-t5-small-insufficient-context/
-trainer_state.json
-*.tmp
+*.bin
+*.pt
+*.h5
+*.ckpt
+logs/
 
 # Datasets cache
 .cache/
