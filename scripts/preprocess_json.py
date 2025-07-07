@@ -1,7 +1,7 @@
 import json
 import re
 import pandas as pd
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup #
 
 INPUT_JSON = "data/raw_mmau_pilot_af3.jsonl"
 OUTPUT_CSV = "data/mmau_pilot_af3.csv"
