@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+logs/
+*.ipynb
+*.ckpt
+*.log
+flan-t5-small-insufficient-context/
