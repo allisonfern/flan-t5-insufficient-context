@@ -1,7 +1,64 @@
+# Python
 __pycache__/
-*.pyc
-logs/
-*.ipynb
-*.ckpt
+*.py[cod]
+*.so
+*.ipynb_checkpoints/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Mac OS
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Logs
 *.log
+logs/
+
+# Checkpoints and Hugging Face outputs
+*.ckpt
+checkpoint/
+checkpoints/
+runs/
+output/
+*.pt
+*.bin
+*.h5
+
+# Transformers Trainer output
 flan-t5-small-insufficient-context/
+trainer_state.json
+*.tmp
+
+# Datasets cache
+.cache/
+dataset_cache/
+datasets/
+data/*.arrow
+
+# Hugging Face cache
+~/.cache/huggingface/
+
+# CSVs or data files (optional if not needed)
+*.csv
+
+# Model artifacts
+*.onnx
+*.pb
+pytorch_model.bin
+tf_model.h5
+
+# Tokenizers
+tokenizer_config.json
+special_tokens_map.json
+
+# Save directories
+saved_models/
+
