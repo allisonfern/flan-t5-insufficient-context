@@ -49,9 +49,6 @@ data/*.arrow
 # Hugging Face cache
 ~/.cache/huggingface/
 
-# CSVs or data files (optional if not needed)
-*.csv
-
 # Model artifacts
 *.onnx
 *.pb
