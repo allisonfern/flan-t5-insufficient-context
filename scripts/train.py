@@ -8,32 +8,37 @@ from tqdm import tqdm
 
 MODEL_NAME = "google/flan-t5-small"
 
-df = pd.read_csv("data/processed.csv")
-
-print(df.columns)
-
-# candidate answers: human annotation for sufficiency (already saved in target)
-df["input"] = (
-    "question: " + df["question"] +
-    " reference answer: " + df["reference"] +
-    " rationale: " + df["rationale"] +
-    " candidate answer: " + df["candidate"]
-
+full_df = pd.read_csv("/content/drive/MyDrive/JSALT/processed.csv")
+only_q_df = pd.read_csv("/content/drive/MyDrive/JSALT/processed_q_only.csv")
+full_df["input"] = (
+    "question: " + full_df["question"] +
+    " reference answer: " + full_df["reference"] +
+    " rationale: " + full_df["rationale"] +
+    " candidate answer: " + full_df["candidate"]
 )
+full_df["target"] = full_df["label"]
 
-df["target"] = df["label"]
+only_q_df["input"] = "question: " + only_q_df["question"]
+only_q_df["target"] = only_q_df["label"]
 
-df = df[["input", "target"]].dropna()
-df.reset_index(drop=True, inplace=True)  # drop old index
+# combine everyone human annotations and question sufficiency annotations
+combined_df = pd.concat([full_df, only_q_df], ignore_index=True)
+combined_df = combined_df.dropna(subset=["target"])
 
-print(df.head())
-print(df.columns)
+# downsample "Sufficient"
+minority_df = combined_df[combined_df["target"] != "Sufficient"]
+sufficient_df = combined_df[combined_df["target"] == "Sufficient"]
+
+downsampled_sufficient = sufficient_df.sample(n=len(minority_df), random_state=42)
+balanced_df = pd.concat([minority_df, downsampled_sufficient])
+balanced_df = balanced_df.reset_index(drop=True)
+
 
 
 
 # Training
-dataset = Dataset.from_pandas(df)
-dataset = dataset.train_test_split(test_size=0.1) # 90% training 10% testing ?
+dataset = Dataset.from_pandas(balanced_df)
+dataset = dataset.train_test_split(test_size=0.2)
 
 # load flan t5 huggingface tokenizer
 tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
@@ -61,8 +66,17 @@ tokenized = dataset.map(
     remove_columns=dataset["train"].column_names
 )
 
+
+
 # custom training loop
 
+import torch
+from torch.utils.data import DataLoader
+from transformers import T5Tokenizer, T5ForConditionalGeneration, DataCollatorForSeq2Seq
+from torch.optim import AdamW
+from datasets import Dataset
+import pandas as pd
+from tqdm import tqdm
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
@@ -76,7 +90,7 @@ eval_loader = DataLoader(tokenized["test"], batch_size=4, collate_fn=data_collat
 optimizer = AdamW(model.parameters(), lr=5e-5) # same optimizer as Trainer class
 
 # Training loop
-num_epochs = 3
+num_epochs = 5
 for epoch in range(num_epochs):
     model.train()
     total_train_loss = 0
@@ -100,22 +114,5 @@ for epoch in range(num_epochs):
 
     avg_train_loss = total_train_loss / len(train_loader)
     print(f"Epoch {epoch+1} Training Loss: {avg_train_loss:.4f}")
-
-    # Evaluation loop
-    model.eval()
-    total_eval_loss = 0
-
-    with torch.no_grad():
-        for batch in tqdm(eval_loader, desc=f"Epoch {epoch+1} - Evaluation"):
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            labels = batch["labels"].to(device)
-
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            loss = outputs.loss
-            total_eval_loss += loss.item()
-
-    avg_eval_loss = total_eval_loss / len(eval_loader)
-    print(f"Epoch {epoch+1} Evaluation Loss: {avg_eval_loss:.4f}")
 
 
