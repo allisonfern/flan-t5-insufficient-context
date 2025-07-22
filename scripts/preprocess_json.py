@@ -7,7 +7,7 @@ output_csv = "data/processed.csv"
 def determine_label(feedback_lists):
     feedback = [item for sublist in feedback_lists if sublist for item in sublist]
     has_q = "q" in feedback
-    has_a = "a" in feedback
+    has_a = "a" in feedback # duplicate if quesiton has multiple feedback annotations?
 
     if has_q:
         return "Question incomplete", has_q, has_a
