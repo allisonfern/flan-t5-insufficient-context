@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 
-input_file = "data/human_ratings_july_16.json"
+input_file = "data/human_ratings_july_22.json"
 output_csv = "data/processed.csv"
 
 def determine_label(feedback_lists):
