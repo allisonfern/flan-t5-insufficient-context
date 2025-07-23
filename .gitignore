@@ -62,5 +62,5 @@ special_tokens_map.json
 # Save directories
 saved_models/
 
-/trained_model/
-/trained_model/
+/trained_model*/
+

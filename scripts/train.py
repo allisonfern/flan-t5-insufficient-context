@@ -5,10 +5,12 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from tqdm import tqdm
+from sklearn.utils import resample
+
 
 MODEL_NAME = "google/flan-t5-small"
 
-# combines human annotation data with question only data, downsamples sufficient label, returns balanced_df
+# combines human annotation data with question only data, upsamples non-sufficient labels, returns balanced_df
 def load_and_prepare_data():
     full_df = pd.read_csv("data/processed.csv")
     only_q_df = pd.read_csv("data/processed_q_only.csv")
@@ -26,10 +28,27 @@ def load_and_prepare_data():
 
     combined_df = pd.concat([full_df, only_q_df], ignore_index=True)
     combined_df = combined_df.dropna(subset=["target"])
-    minority_df = combined_df[combined_df["target"] != "Sufficient"]
     sufficient_df = combined_df[combined_df["target"] == "Sufficient"]
-    downsampled_sufficient = sufficient_df.sample(n=len(minority_df), random_state=42)
-    balanced_df = pd.concat([minority_df, downsampled_sufficient])
+    insufficient_q_df = combined_df[combined_df["target"] == "Question incomplete"]
+    insufficient_r_df = combined_df[combined_df["target"] == "Rationale insufficient"]
+
+    print("Sufficient:", len(sufficient_df))
+    print("Insufficient due to question:", len(insufficient_q_df))
+    print("Insufficient due to rationale:", len(insufficient_r_df))
+
+
+    max_size = max(len(sufficient_df), len(insufficient_q_df), len(insufficient_r_df))
+
+    # Upsample each minority class
+    sufficient_df_upsampled = resample(sufficient_df, replace=True, n_samples=max_size, random_state=42)
+    insufficient_q_df_upsampled = resample(insufficient_q_df, replace=True, n_samples=max_size, random_state=42)
+    insufficient_r_df_upsampled = resample(insufficient_r_df, replace=True, n_samples=max_size, random_state=42)
+
+    balanced_df = pd.concat([
+        sufficient_df_upsampled,
+        insufficient_q_df_upsampled,
+        insufficient_r_df_upsampled
+    ])
     return balanced_df.reset_index(drop=True)
 
 def preprocess(batch, tokenizer):
@@ -56,7 +75,7 @@ def train():
 
     optimizer = AdamW(model.parameters(), lr=5e-5)
 
-    num_epochs = 5 
+    num_epochs = 5
     for epoch in range(num_epochs):
         model.train()
         total_train_loss = 0

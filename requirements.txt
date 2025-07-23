@@ -2,4 +2,11 @@ transformers
 datasets
 accelerate
 pandas
+datasets
+tensorflow
+torch
 scikit-learn
+tqdm
+matplotlib
+seaborn
+

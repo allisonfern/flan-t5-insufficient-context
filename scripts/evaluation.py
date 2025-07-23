@@ -1,6 +1,8 @@
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 import pandas as pd
 from datasets import Dataset
@@ -87,8 +89,8 @@ def evaluate():
             preds = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
             targets = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
-            cleaned_preds = [clean_prediction(p) for p in preds]
-            cleaned_labels = [clean_prediction(t) for t in targets]
+            cleaned_preds = [p for p in preds]
+            cleaned_labels = [t for t in targets]
 
             all_preds.extend(cleaned_preds)
             all_labels.extend(cleaned_labels)
@@ -100,7 +102,19 @@ def evaluate():
     print(f"Exact Match Accuracy: {accuracy:.4f}")
     print(classification_report(all_labels, all_preds, digits=3))
 
-    for i in range(5):
+    # Generate confusion matrix
+    cm = confusion_matrix(all_labels, all_preds, labels=list(label_set))
+
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=list(label_set),
+                yticklabels=list(label_set))
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
+    plt.title(f'Confusion Matrix')
+    plt.savefig("confusion_matrix.png")  # 👈 save the plot
+
+    for i in range(10):
         print(f"\n🔍 Example {i+1}")
         print(f"Prediction: {all_preds[i]}")
         print(f"Target    : {all_labels[i]}")
