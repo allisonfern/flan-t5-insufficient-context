@@ -5,8 +5,6 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from tqdm import tqdm
-from sklearn.utils import resample
-
 
 MODEL_NAME = "google/flan-t5-small"
 
@@ -28,28 +26,10 @@ def load_and_prepare_data():
 
     combined_df = pd.concat([full_df, only_q_df], ignore_index=True)
     combined_df = combined_df.dropna(subset=["target"])
-
+    minority_df = combined_df[combined_df["target"] != "Sufficient"]
     sufficient_df = combined_df[combined_df["target"] == "Sufficient"]
-    insufficient_q_df = combined_df[combined_df["target"] == "Question incomplete"]
-    insufficient_r_df = combined_df[combined_df["target"] == "Rationale insufficient"]
-
-    print("Sufficient:", len(sufficient_df))
-    print("Insufficient due to question:", len(insufficient_q_df))
-    print("Insufficient due to rationale:", len(insufficient_r_df))
-
-
-    max_size = max(len(sufficient_df), len(insufficient_q_df), len(insufficient_r_df))
-
-    # Upsample each minority class
-    sufficient_df_upsampled = resample(sufficient_df, replace=True, n_samples=max_size, random_state=42)
-    insufficient_q_df_upsampled = resample(insufficient_q_df, replace=True, n_samples=max_size, random_state=42)
-    insufficient_r_df_upsampled = resample(insufficient_r_df, replace=True, n_samples=max_size, random_state=42)
-
-    balanced_df = pd.concat([
-        sufficient_df_upsampled,
-        insufficient_q_df_upsampled,
-        insufficient_r_df_upsampled
-    ])
+    downsampled_sufficient = sufficient_df.sample(n=len(minority_df), random_state=42)
+    balanced_df = pd.concat([minority_df, downsampled_sufficient])
     return balanced_df.reset_index(drop=True)
 
 def preprocess(batch, tokenizer):
@@ -76,7 +56,7 @@ def train():
 
     optimizer = AdamW(model.parameters(), lr=5e-5)
 
-    num_epochs = 5
+    num_epochs = 5 
     for epoch in range(num_epochs):
         model.train()
         total_train_loss = 0
@@ -103,17 +83,3 @@ def train():
 
 if __name__ == "__main__":
     train()
-
-
-
-# Epoch 5 Evaluation Loss: 0.0128
-# Epoch 5 Exact Match Accuracy: 0.6111
-#                         precision    recall  f1-score   support
-
-#    Question incomplete      0.722     0.695     0.708       580
-# Rationale insufficient      0.527     0.616     0.568       547
-#             Sufficient      0.595     0.517     0.553       547
-
-#               accuracy                          0.611      1674
-#              macro avg      0.614     0.609     0.610      1674
-#           weighted avg      0.617     0.611     0.612      1674
