@@ -1,6 +1,6 @@
 import pandas as pd
 from datasets import Dataset
-from transformers import T5Tokenizer, T5ForConditionalGeneration, DataCollatorForSeq2Seq
+from transformers import T5Tokenizer, T5ForConditionalGeneration, DataCollatorForSeq2Seq, T5ForSequenceClassification, DataCollatorWithPadding
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
@@ -51,22 +51,37 @@ def load_and_prepare_data():
     ])
     return balanced_df.reset_index(drop=True)
 
+LABEL2ID = {
+    "Sufficient": 0,
+    "Rationale insufficient": 1,
+    "Question incomplete": 2,
+}
+ID2LABEL = {v: k for k, v in LABEL2ID.items()}
+
 def preprocess(batch, tokenizer):
-    model_inputs = tokenizer(batch["input"], truncation=True, padding="max_length", max_length=512)
-    labels = tokenizer(batch["target"], truncation=True, padding="max_length", max_length=64)
-    model_inputs["labels"] = labels["input_ids"]
-    return model_inputs
+    tokenized = tokenizer(batch["input"], truncation=True, padding="max_length", max_length=512)
+    tokenized["labels"] = [LABEL2ID[label] for label in batch["target"]]
+    return tokenized
+
+
 
 def train():
     df = load_and_prepare_data()
     dataset = Dataset.from_pandas(df).train_test_split(test_size=0.2)
 
     tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
-    model = T5ForConditionalGeneration.from_pretrained(MODEL_NAME)
+    
+    model = T5ForSequenceClassification.from_pretrained(
+        MODEL_NAME,
+        num_labels=3,
+        id2label={0: "Sufficient", 1: "Rationale insufficient", 2: "Question incomplete"},
+        label2id={"Sufficient": 0, "Rationale insufficient": 1, "Question incomplete": 2},
+        problem_type="single_label_classification"
+    )
 
     tokenized = dataset.map(lambda x: preprocess(x, tokenizer), batched=True, remove_columns=dataset["train"].column_names)
 
-    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     train_loader = DataLoader(tokenized["train"], batch_size=4, shuffle=True, collate_fn=data_collator)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -96,6 +111,10 @@ def train():
 
         avg_train_loss = total_train_loss / len(train_loader)
         print(f"Epoch {epoch+1} Training Loss: {avg_train_loss:.4f}")
+
+    model.save_pretrained("trained_model")
+    tokenizer.save_pretrained("trained_model")
+
 
     model.save_pretrained("trained_model")
     tokenizer.save_pretrained("trained_model")
