@@ -1,4 +1,6 @@
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.utils import resample
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -8,7 +10,7 @@ from torch.utils.data import DataLoader
 from datasets import Dataset
 from transformers import T5Tokenizer, T5ForSequenceClassification, DataCollatorWithPadding
 
-MODEL_NAME = "trained_model_0.9086"
+MODEL_NAME = "trained_model"
 
 LABEL2ID = {
     "Sufficient": 0,
@@ -17,53 +19,75 @@ LABEL2ID = {
 }
 ID2LABEL = {v: k for k, v in LABEL2ID.items()}
 
-
-def load_and_prepare_data():
-    full_df = pd.read_csv("data/processed.csv")
-    only_q_df = pd.read_csv("data/processed_q_only.csv")
-
-    full_df["input"] = (
-        "question: " + full_df["question"] +
-        " reference answer: " + full_df["reference"] +
-        " rationale: " + full_df["rationale"] +
-        " candidate answer: " + full_df["candidate"]
-    )
-    full_df["target"] = full_df["label"]
-    only_q_df["input"] = "question: " + only_q_df["question"]
-    only_q_df["target"] = only_q_df["label"]
-
-    combined_df = pd.concat([full_df, only_q_df], ignore_index=True)
-    combined_df = combined_df.dropna(subset=["target"])
-
-    minority_df = combined_df[combined_df["target"] != "Sufficient"]
-    sufficient_df = combined_df[combined_df["target"] == "Sufficient"]
-
-    downsampled_sufficient = sufficient_df.sample(n=len(minority_df), random_state=42)
-    balanced_df = pd.concat([minority_df, downsampled_sufficient])
-    return balanced_df.reset_index(drop=True)
-
-
 def preprocess(batch, tokenizer):
     tokenized = tokenizer(batch["input"], truncation=True, padding="max_length", max_length=512)
     tokenized["labels"] = [LABEL2ID[label] for label in batch["target"]]
     return tokenized
 
+def load_and_prepare_data():
+    mmar_df = pd.read_csv("data/reformatted/reform_processed_mmar.csv")
+    mmau_df = pd.read_csv("data/reformatted/reform_processed_mmaumini.csv")
+    full_df = pd.concat([mmar_df, mmau_df], ignore_index=True)
+    only_q_df = pd.read_csv("data/processed_q_only.csv")
+
+    full_df["target"] = full_df["label"]
+    only_q_df["target"] = only_q_df["label"]
+
+    combined_df = pd.concat([full_df, only_q_df], ignore_index=True)
+    combined_df = combined_df.dropna(subset=["target"]) # remove rows with no label (shouldn't be any)
+
+    sufficient_df = combined_df[combined_df["target"] == "Sufficient"]
+    insufficient_q_df = combined_df[combined_df["target"] == "Question incomplete"]
+    insufficient_r_df = combined_df[combined_df["target"] == "Rationale insufficient"]
+    print("Sufficient:", len(sufficient_df))
+    print("Insufficient due to question:", len(insufficient_q_df))
+    print("Insufficient due to rationale:", len(insufficient_r_df))
+
+    max_size = max(len(sufficient_df), len(insufficient_q_df), len(insufficient_r_df))
+    # Upsample each minority class
+    sufficient_df_upsampled = resample(sufficient_df, replace=True, n_samples=max_size, random_state=42)
+    insufficient_q_df_upsampled = resample(insufficient_q_df, replace=True, n_samples=max_size, random_state=42)
+    insufficient_r_df_upsampled = resample(insufficient_r_df, replace=True, n_samples=max_size, random_state=42)
+
+    balanced_df = pd.concat([
+        sufficient_df_upsampled,
+        insufficient_q_df_upsampled,
+        insufficient_r_df_upsampled
+    ])
+    
+    return balanced_df.reset_index(drop=True)
+
+def build_test_loader(model_path=MODEL_NAME, batch_size=4):
+    tokenizer = T5Tokenizer.from_pretrained(model_path)
+
+    df = load_and_prepare_data()
+    _, test_df = train_test_split(df, test_size=0.2, stratify=df["target"], random_state=42)
+
+    test_df["input"] = (
+        "question: " + test_df["question"] +
+        " reference answer: " + test_df["reference"].fillna('') +
+        " rationale: " + test_df["rationale"].fillna('') +
+        " candidate answer: " + test_df["candidates"].apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 else '')
+    )
+
+    test_dataset = Dataset.from_pandas(test_df)
+    tokenized_test = test_dataset.map(lambda x: preprocess(x, tokenizer), batched=True, remove_columns=test_dataset.column_names)
+
+    collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    eval_loader = DataLoader(tokenized_test, batch_size=batch_size, shuffle=False, collate_fn=collator)
+    return eval_loader, tokenizer, test_df["input"].tolist()
 
 def evaluate():
-    df = load_and_prepare_data()
-    dataset = Dataset.from_pandas(df).train_test_split(test_size=0.2)
-
-    tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
-    model = T5ForSequenceClassification.from_pretrained(MODEL_NAME)
-
-    tokenized = dataset.map(lambda x: preprocess(x, tokenizer), batched=True, remove_columns=dataset["train"].column_names)
-    questions = dataset["test"]["question"]
-
-
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-    eval_loader = DataLoader(tokenized["test"], batch_size=4, collate_fn=data_collator)
+    eval_loader, tokenizer, inputs = build_test_loader()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = T5ForSequenceClassification.from_pretrained(
+        MODEL_NAME,
+        num_labels=3,
+        id2label=ID2LABEL,
+        label2id=LABEL2ID,
+        problem_type="single_label_classification"
+    )
     model.to(device)
     model.eval()
 
@@ -89,7 +113,7 @@ def evaluate():
     avg_eval_loss = total_eval_loss / len(eval_loader)
     accuracy = accuracy_score(all_labels, all_preds)
 
-    print(f"Evaluation Loss: {avg_eval_loss:.4f}")
+    print(f"\nEvaluation Loss: {avg_eval_loss:.4f}")
     print(f"Accuracy: {accuracy:.4f}")
     print("\nClassification Report:\n")
     print(classification_report(all_labels, all_preds, target_names=[ID2LABEL[i] for i in range(3)], digits=3))
@@ -102,16 +126,16 @@ def evaluate():
                 yticklabels=[ID2LABEL[i] for i in range(3)])
     plt.xlabel('Predicted Labels')
     plt.ylabel('True Labels')
-    plt.title(f'Confusion Matrix')
+    plt.title('Confusion Matrix')
     plt.savefig("confusion_matrix.png")
 
-    # Show a few predictions
-    for i in range(len(all_preds)):
-        if (all_preds[i] != all_labels[i]):
-            print(f"\n🔍 Example {i+1}")
-            print(f"Question: {questions[i]}")
-            print(f"Prediction: {ID2LABEL[all_preds[i]]}")
-            print(f"Target    : {ID2LABEL[all_labels[i]]}")
+    # Show a few misclassified examples
+    for i in range(10):
+        # if all_preds[i] != all_labels[i]:
+        print(f"\n🔍 Example {i+1}")
+        print(f"Input: {inputs[i]}")
+        print(f"Prediction: {ID2LABEL[all_preds[i]]}")
+        print(f"Target    : {ID2LABEL[all_labels[i]]}")
 
 
 if __name__ == "__main__":
