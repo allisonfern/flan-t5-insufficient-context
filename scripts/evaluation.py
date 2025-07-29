@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from datasets import Dataset
 from transformers import T5Tokenizer, T5ForSequenceClassification, DataCollatorWithPadding
 
-MODEL_NAME = "trained_model"
+MODEL_NAME = "trained_model_0.9086"
 
 LABEL2ID = {
     "Sufficient": 0,
@@ -57,6 +57,8 @@ def evaluate():
     model = T5ForSequenceClassification.from_pretrained(MODEL_NAME)
 
     tokenized = dataset.map(lambda x: preprocess(x, tokenizer), batched=True, remove_columns=dataset["train"].column_names)
+    questions = dataset["test"]["question"]
+
 
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     eval_loader = DataLoader(tokenized["test"], batch_size=4, collate_fn=data_collator)
@@ -104,10 +106,12 @@ def evaluate():
     plt.savefig("confusion_matrix.png")
 
     # Show a few predictions
-    for i in range(10):
-        print(f"\n🔍 Example {i+1}")
-        print(f"Prediction: {ID2LABEL[all_preds[i]]}")
-        print(f"Target    : {ID2LABEL[all_labels[i]]}")
+    for i in range(len(all_preds)):
+        if (all_preds[i] != all_labels[i]):
+            print(f"\n🔍 Example {i+1}")
+            print(f"Question: {questions[i]}")
+            print(f"Prediction: {ID2LABEL[all_preds[i]]}")
+            print(f"Target    : {ID2LABEL[all_labels[i]]}")
 
 
 if __name__ == "__main__":

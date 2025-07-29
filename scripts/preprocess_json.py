@@ -1,24 +1,38 @@
 import json
 import pandas as pd
 
-input_file = "data/human_ratings_july_22.json"
-output_csv = "data/processed.csv"
 
-def determine_label(feedback_lists):
-    feedback = [item for sublist in feedback_lists if sublist for item in sublist]
-    has_q = "q" in feedback
-    has_a = "a" in feedback # duplicate if quesiton has multiple feedback annotations?
+# preprocess mmau and mmar annotation files:
 
+# input_file = "data/reformatted/human_ratings_reform_mmau_test_mini.json"
+# output_csv = "data/reformatted/reform_processed_mmaumini.csv"
+
+input_file = "data/reformatted/human_ratings_reform_MMAR.json"
+output_csv = "data/reformatted/reform_processed_mmar.csv"
+
+def determine_label(feedback_list):
+    feedback = []
+    for f in feedback_list:
+        if isinstance(f, str):
+            feedback.append(f.lower())
+        elif isinstance(f, list):  # flatten nested lists
+            feedback.extend(s.lower() for s in f if isinstance(s, str))
+
+    has_q = any("q" in f for f in feedback)
+    has_a = any("a" in f for f in feedback)
+    # how to handle instances with both annotations?
+    if has_q and has_a:
+        return "Both"
     if has_q:
-        return "Question incomplete", has_q, has_a
+        return "Question incomplete"
     if has_a:
-        return "Rationale insufficient", has_q, has_a
-    return "Sufficient", has_q, has_a
+        return "Rationale insufficient"
+    return "Sufficient"
 
 all_rows = []
 total_q = 0
 total_a = 0
-total_neither = 0
+total_both = 0
 
 print(f"🔍 Processing {input_file}")
 with open(input_file, "r") as f:
@@ -27,36 +41,66 @@ with open(input_file, "r") as f:
     for _, example in data.items():
         question = example.get("question", "").strip()
         rationale = example.get("rationale", "").strip()
-        reference = example.get("reference", "").strip()
-        candidate = example.get("candidate", "").strip()
-        feedback = example.get("feedback", [])
+        reference = example.get("reference_answer", "").strip()
+        lalms = example.get("lalms", {})
 
-        if not question or not rationale or not reference or not candidate:
-            continue
+        # Track if any model has feedback
+        selected_row = None
+        candidates = []
+        gen_label = "Sufficient" # keep track of the label to apply to all instances
+        for model_name, model_data in lalms.items():
+            candidate = model_data.get("candidate", "").strip()
+            feedback = model_data.get("feedback", [])
+            
+            candidates.append(candidate) # store all candidate answers in a list
 
-        label, has_q, has_a = determine_label(feedback)
+            label = determine_label(feedback)
 
-        if has_q:
-            total_q += 1
-        elif has_a:
-            total_a += 1
+            if label == "Both":
+                total_both +=1
+            elif label == "Question incomplete":
+                total_q += 1
+                gen_label = label
+            elif label == "Rationale insufficient":
+                total_a += 1
+                gen_label = label
+
+
+        if label == "Both":
+            all_rows.append({
+                "question": question,
+                "rationale": rationale,
+                "reference": reference,
+                "candidates": candidates,
+                "label": "Question incomplete"
+            })
+            all_rows.append({
+                "question": question,
+                "rationale": rationale,
+                "reference": reference,
+                "candidates": candidates,
+                "label": "Rationale insufficient"
+            })
+
         else:
-            total_neither += 1
+            selected_row = {
+                "question": question,
+                "rationale": rationale,
+                "reference": reference,
+                "candidates": candidates,
+                "label": gen_label
+            }
 
-        all_rows.append({
-            "question": question,
-            "rationale": rationale,
-            "reference": reference,
-            "candidate": candidate,
-            "label": label
-        })
+            all_rows.append(selected_row)
 
+# Save to CSV
 pd.DataFrame(all_rows).to_csv(output_csv, index=False)
 
 print(f"\n✅ Finished processing.")
 print(f"   ➤ Saved {len(all_rows)} examples to {output_csv}")
 print("📊 Stats:")
-print(f"   • Total questions           : {len(all_rows)}")
+print(f"   • Total examples            : {len(all_rows)}")
 print(f"   • Question incomplete (q)   : {total_q}")
 print(f"   • Rationale insufficient (a): {total_a}")
-print(f"   • Sufficient (neither)      : {total_neither}")
+print(f"   • Sufficient (neither)      : {len(all_rows) - total_q - total_a}")
+print(f"   • Both                      : {total_both}")

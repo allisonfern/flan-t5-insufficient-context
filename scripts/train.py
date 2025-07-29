@@ -12,7 +12,9 @@ MODEL_NAME = "google/flan-t5-small"
 
 # combines human annotation data with question only data, upsamples non-sufficient labels, returns balanced_df
 def load_and_prepare_data():
-    full_df = pd.read_csv("data/processed.csv")
+    mmar_df = pd.read_csv("data/reformatted/reform_processed_mmar.csv")
+    mmau_df = pd.read_csv("data/reformatted/reform_processed_mmaumini.csv")
+    full_df = pd.concat([mmar_df, mmau_df])
     only_q_df = pd.read_csv("data/processed_q_only.csv")
 
     full_df["input"] = (
@@ -88,9 +90,9 @@ def train():
     model.to(device)
     print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU only")
 
-    optimizer = AdamW(model.parameters(), lr=5e-5)
+    optimizer = AdamW(model.parameters(), lr=7e-5)
 
-    num_epochs = 5
+    num_epochs = 10
     for epoch in range(num_epochs):
         model.train()
         total_train_loss = 0
