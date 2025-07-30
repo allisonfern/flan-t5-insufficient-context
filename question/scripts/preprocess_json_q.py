@@ -4,11 +4,11 @@ import pandas as pd
 
 # preprocess mmau and mmar annotation files:
 
-input_file = "../data/human_ratings_reform_mmau_test_mini.json"
-output_csv = "../data/processed_mmaumini_q.csv"
+# input_file = "../data/human_ratings_reform_mmau_test_mini.json"
+# output_csv = "../data/processed_mmaumini_q.csv"
 
-# input_file = "../data/human_ratings_reform_MMAR.json"
-# output_csv = "../data/processed_mmar_q.csv"
+input_file = "../data/human_ratings_reform_MMAR.json"
+output_csv = "../data/processed_mmar_q.csv"
 
 def determine_label(feedback_list):
     feedback = []
