@@ -20,17 +20,14 @@ def process_question_only_txt(filepath):
 
         all_rows.append({
             "question": question,
-            "rationale": "",
-            "reference": "",
-            "candidate": "",
             "label": label
         })
 
     return pd.DataFrame(all_rows)
 
 # Example usage
-input_txt = "data/mmau_question_annot.txt"
-output_csv = "data/processed_q_only.csv"
+input_txt = "../data/mmau_question_annot.txt"
+output_csv = "../data/processed_q_only.csv"
 
 df = process_question_only_txt(input_txt)
 df.to_csv(output_csv, index=False)

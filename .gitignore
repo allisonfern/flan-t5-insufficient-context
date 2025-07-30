@@ -63,5 +63,6 @@ special_tokens_map.json
 saved_models/
 
 /models_dup_data/
-/trained_model*/
+question/trained_model*/
+rationale/trained_model*/
 

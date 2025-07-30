@@ -10,12 +10,11 @@ import json
 
 LABEL2ID = {
     "Sufficient": 0,
-    "Rationale insufficient": 1,
-    "Question incomplete": 2,
+    "Question incomplete": 1,
 }
 ID2LABEL = {v: k for k, v in LABEL2ID.items()}
 
-MODEL_NAME = "trained_model_0.9113"
+MODEL_NAME = "../trained_model_q"
 
 def preprocess_eval(example, tokenizer):
     input_text = example["question"]
@@ -33,7 +32,7 @@ def generate_choice_necessity() -> List[str]:
     tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
     model = T5ForSequenceClassification.from_pretrained(MODEL_NAME)
 
-    df = pd.read_json("data/speech_sliced.json")
+    df = pd.read_json("../data/speech_sliced.json")
     df = df[df["question"].notna()].reset_index(drop=True)
 
     dataset = Dataset.from_pandas(df)
@@ -72,4 +71,17 @@ if __name__ == "__main__":
     predictions, filtered_df = generate_choice_necessity()
     gold_labels = get_ground_truth_labels(filtered_df)
     evaluate_model(predictions, gold_labels)
+
+     # Print a few incorrect predictions
+    print("\n=== Incorrect Predictions ===")
+    incorrect = []
+    for i, (pred, gold) in enumerate(zip(predictions, gold_labels)):
+        if pred != gold:
+            incorrect.append((i, filtered_df.loc[i, "question"], gold, pred))
+    
+    for idx, question, gold, pred in incorrect[:10]:  # Show up to 10 incorrect predictions
+        print(f"\nIndex: {idx}")
+        print(f"Question: {question}")
+        print(f"Gold Label: {gold}")
+        print(f"Predicted Label: {pred}")
 
