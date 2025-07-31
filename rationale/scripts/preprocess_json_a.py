@@ -4,11 +4,11 @@ import pandas as pd
 
 # preprocess mmau and mmar annotation files:
 
-input_file = "../data/human_ratings_reform_mmau_test_mini.json"
-output_csv = "../data/processed_mmaumini_a.csv"
+# input_file = "../data/human_ratings_reform_mmau_test_mini.json"
+# output_csv = "../data/processed_mmaumini_a.csv"
 
-# input_file = "../data/human_ratings_reform_MMAR.json"
-# output_csv = "../data/processed_mmar_a.csv"
+input_file = "../data/human_ratings_reform_MMAR.json"
+output_csv = "../data/processed_mmar_a.csv"
 
 def determine_label(feedback_list):
     feedback = []
@@ -57,15 +57,15 @@ with open(input_file, "r") as f:
                     "label": "Rationale insufficient"
                 })
         if has_a_annot == False:
-            for c in candidates:
-                total_suff += 1
-                all_rows.append({
-                    "question": question,
-                    "rationale": rationale,
-                    "reference": reference,
-                    "candidate": c,
-                    "label": "Sufficient"
-                })
+            # for c in candidates:
+            total_suff += 1
+            all_rows.append({
+                "question": question,
+                "rationale": rationale,
+                "reference": reference,
+                "candidate": candidates[0],
+                "label": "Sufficient"
+            })
 
 # Save to CSV
 pd.DataFrame(all_rows).to_csv(output_csv, index=False)
